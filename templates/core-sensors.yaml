@@ -12,6 +12,7 @@
 # MIT License
 #
 ##############################################################
+
 ##############################################################
 #
 # CONFIGURATION
@@ -177,6 +178,21 @@ template:
 
   ############################################################
   #
+  # Configuration Helpers
+  #
+  ############################################################
+
+  - sensor:
+
+      - name: "HAES Energy Price"
+        unique_id: haes_energy_price
+        icon: mdi:currency-eur
+        unit_of_measurement: "EUR/kWh"
+        state_class: measurement
+        state: "0.25"
+
+  ############################################################
+  #
   # Self Sufficiency
   #
   ############################################################
@@ -212,7 +228,7 @@ template:
         device_class: monetary
         state_class: measurement
         state: >
-          {% set energy_price = 0.25 %}
+          {% set energy_price = states('sensor.haes_energy_price') | float(0.25) %}
           {{ (states('sensor.haes_grid_import_today') | float(0) * energy_price) | round(2) }}
 
       - name: "HAES Cost Without PV - Today"
@@ -222,7 +238,7 @@ template:
         device_class: monetary
         state_class: measurement
         state: >
-          {% set energy_price = 0.25 %}
+          {% set energy_price = states('sensor.haes_energy_price') | float(0.25) %}
           {{ (states('sensor.haes_consumption_today') | float(0) * energy_price) | round(2) }}
 
   ############################################################
