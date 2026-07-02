@@ -6,6 +6,8 @@ HA Energy Suite è una raccolta di card per Home Assistant dedicate agli impiant
 
 L'obiettivo è semplice: condividere le card che utilizzo ogni giorno sul mio impianto, permettendo a chiunque di installarle in pochi minuti senza configurazioni complicate.
 
+![Monthly Report](screenshots/monthly-report.png)
+
 Niente framework.
 Niente installazioni complesse.
 Solo card utili, curate e facili da adattare al proprio impianto.
