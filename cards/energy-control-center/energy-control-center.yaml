@@ -1,0 +1,949 @@
+type: custom:button-card
+name: Energy Control Center
+icon: mdi:solar-power-variant
+show_state: false
+show_icon: false
+show_name: false
+custom_fields:
+  content: |
+    [[[
+      const n = (e) => {
+        const v = parseFloat(states[e]?.state);
+        return isNaN(v) ? 0 : v;
+      };
+
+      const fmtW = (v) => `${Math.round(v)} W`;
+      const fmtKwh = (v, d = 1) => `${v.toFixed(d)} kWh`;
+      const fmtEuro = (v) => `€ ${Math.round(v)}`;
+
+      const pv = n('sensor.inverter_pv_power');
+      const casa = n('sensor.inverter_load_l1_power');
+      const reteCt = n('sensor.inverter_internal_ct1_power');
+      const batt = n('sensor.inverter_battery');
+      const prodOggi = n('sensor.inverter_today_production') / 1000;
+      const prevOggi = n('sensor.solcast_pv_forecast_previsione_per_oggi');
+      const rimOggi = n('sensor.solcast_pv_forecast_previsione_rimanente_per_oggi');
+      const domani = n('sensor.solcast_pv_forecast_previsione_per_domani');
+      const pot30 = n('sensor.solcast_pv_forecast_potenza_tra_30_minuti');
+      const pot1h = n('sensor.solcast_pv_forecast_potenza_tra_1_ora');
+      const importOggiWh = n('sensor.inverter_today_energy_import');
+
+      const piccoPrev = n('sensor.solcast_pv_forecast_picco_di_previsione_per_oggi');
+      const oraPiccoRaw = states['sensor.solcast_pv_forecast_orario_del_picco_per_oggi']?.state || '';
+      let oraPicco = '—';
+      if (oraPiccoRaw && oraPiccoRaw !== 'unknown' && oraPiccoRaw !== 'unavailable') {
+        const d = new Date(oraPiccoRaw);
+        oraPicco = isNaN(d) ? oraPiccoRaw : d.toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' });
+      }
+
+      const piccoRaggiunto = n('sensor.inverter_today_peak_power') || n('sensor.inverter_today_peak');
+
+      const now = new Date();
+      const anno = now.getFullYear();
+      const meseNum = now.getMonth() + 1;
+      const mese = String(meseNum).padStart(2, '0');
+      const giorniMese = new Date(anno, meseNum, 0).getDate();
+      const giorno = now.getDate();
+
+      const consumoMese = n(`sensor.fv_2026_${mese}_consumo_db`);
+      const produzioneMese = n(`sensor.fv_2026_${mese}_produzione_db`);
+      const importMese = n(`sensor.fv_2026_${mese}_import_db`);
+      const exportMese = n(`sensor.fv_2026_${mese}_export_db`);
+
+      const autosuffOggi = n('sensor.autosufficienza_oggi');
+      const autosuffMese = consumoMese > 0 ? Math.max(0, Math.min(100, ((consumoMese - importMese) / consumoMese) * 100)) : 0;
+
+      const costoKwh = n('input_number.costo_kwh_reale') || 0.25;
+      const quotaGiorno = n('input_number.quota_fissa_giornaliera_corrente') || 0;
+      const canoneTv = n('sensor.canone_tv_mensile') || 0;
+      const sspKwh = n('input_number.fv_valore_ssp_kwh') || 0.15;
+
+      const fissi = (quotaGiorno * giorniMese) + canoneTv;
+      const bollettaConFv = (importMese * costoKwh) + fissi;
+      const bollettaSenzaFv = (consumoMese * costoKwh) + fissi;
+      const ssp = exportMese * sspKwh;
+      const beneficio = (bollettaSenzaFv - bollettaConFv) + ssp;
+      const beneficioFine = giorno > 0 ? beneficio / giorno * giorniMese : beneficio;
+
+      const percPrev = prevOggi > 0 ? Math.min(120, (prodOggi / prevOggi) * 100) : 0;
+      const percBar = Math.min(100, percPrev);
+      let reteNow = 'Bilanciato';
+      if (reteCt > 20) reteNow = `Import ${fmtW(reteCt)}`;
+      else if (reteCt < -20) reteNow = `Export ${fmtW(Math.abs(reteCt))}`;
+      const copertura = reteCt < -20 ? 'Casa coperta dal FV' : reteCt > 20 ? 'Casa + carichi sopra FV' : 'Scambio rete quasi nullo';
+      const trendUp = pot1h > pv * 1.20;
+      const trendDown = pot1h < pv * 0.75;
+      const trendLabel = trendUp ? 'In salita' : trendDown ? 'In calo' : 'Stabile';
+      const trendIcon = trendUp ? '↗' : trendDown ? '↘' : '→';
+      const trendClass = trendUp ? 'good' : trendDown ? 'warn' : 'blue';
+
+      const hour = now.getHours();
+      const surplus = pv - casa;
+      const surplus30 = pot30 - casa;
+      const surplus1h = pot1h - casa;
+      const isEvening = hour >= 17 || rimOggi < 1;
+
+      let convScore = 20;
+      if (surplus > 1800) convScore += 35;
+      else if (surplus > 800) convScore += 25;
+      else if (surplus > 200) convScore += 15;
+      else if (surplus < -300) convScore -= 10;
+
+      if (surplus30 > 800 || surplus1h > 800) convScore += 18;
+      else if (surplus30 > 200 || surplus1h > 200) convScore += 10;
+      else if (surplus30 < 0 && surplus1h < 0) convScore -= 12;
+
+      if (batt > 85) convScore += 15;
+      else if (batt > 65) convScore += 8;
+      else if (batt < 35) convScore -= 15;
+
+      if (trendDown) convScore -= 12;
+      if (trendUp) convScore += 8;
+      if (isEvening && surplus <= 0) convScore = Math.min(convScore, batt > 70 ? 35 : 25);
+      if (pv < 300 && casa > pv) convScore = Math.min(convScore, 20);
+      convScore = Math.max(0, Math.min(100, Math.round(convScore)));
+
+      let convColor = '#ff7043';
+      if (convScore >= 80) convColor = '#35ff76';
+      else if (convScore >= 60) convColor = '#66bb6a';
+      else if (convScore >= 40) convColor = '#ffca28';
+      else if (convScore >= 25) convColor = '#ff9800';
+
+      let score = 0;
+      score += Math.min(percPrev, 100) * 0.25;
+      score += Math.min(autosuffOggi, 100) * 0.25;
+      score += Math.min(autosuffMese, 100) * 0.25;
+      score += Math.min(batt, 100) * 0.20;
+      score += importOggiWh < 1000 ? 5 : importOggiWh < 3000 ? 3 : 1;
+      score = Math.min(100, Math.round(score));
+
+      let voto = 'Da migliorare';
+      let colore = '#ff7043';
+      if (score >= 90) { voto = 'Eccellente'; colore = '#35ff76'; }
+      else if (score >= 80) { voto = 'Ottimo'; colore = '#66bb6a'; }
+      else if (score >= 65) { voto = 'Buono'; colore = '#ffca28'; }
+      else if (score >= 50) { voto = 'Discreto'; colore = '#ff9800'; }
+
+      let titoloDecisione = 'Situazione stabile';
+      let testoDecisione = 'L’impianto sta lavorando regolarmente. Mantieni i consumi normali.';
+      let decisionClass = 'blue';
+      if (convScore >= 80) {
+        titoloDecisione = 'Usa energia ora';
+        testoDecisione = 'Alta convenienza: produzione disponibile e condizioni buone per carichi pesanti.';
+        decisionClass = 'good';
+      } else if (convScore >= 60) {
+        titoloDecisione = 'Buon momento';
+        testoDecisione = 'Convenienza buona: puoi spostare qualche consumo, senza esagerare.';
+        decisionClass = 'good';
+      } else if (convScore >= 40) {
+        titoloDecisione = 'Valuta con calma';
+        testoDecisione = 'Convenienza media: usa solo carichi utili, meglio evitare consumi lunghi.';
+        decisionClass = 'warn';
+      } else if (isEvening || trendDown || pv < casa) {
+        titoloDecisione = 'Preserva batteria';
+        testoDecisione = 'Ora non conviene caricare consumi pesanti: stai usando rete o batteria.';
+        decisionClass = 'warn';
+      } else if (batt < 35) {
+        titoloDecisione = 'Limita i consumi';
+        testoDecisione = 'Batteria bassa: evita carichi non indispensabili fino a nuova produzione.';
+        decisionClass = 'danger';
+      }
+
+      const seraLabel = batt >= 70 ? 'Buona' : batt >= 40 ? 'Discreta' : 'Critica';
+
+      const parseTimeValue = (raw) => {
+        if (!raw || raw === 'unknown' || raw === 'unavailable') return null;
+        const txt = String(raw).trim();
+        let d = new Date(txt);
+        if (!isNaN(d)) return d;
+        const m = txt.match(/(\d{1,2})[:.](\d{2})/);
+        if (m) {
+          d = new Date(now);
+          d.setHours(parseInt(m[1], 10), parseInt(m[2], 10), 0, 0);
+          return d;
+        }
+        return null;
+      };
+
+      const findTimeState = (needles) => {
+        const ids = Object.keys(states || {});
+        for (const id of ids) {
+          const low = id.toLowerCase();
+          if (needles.every(x => low.includes(x))) {
+            const d = parseTimeValue(states[id]?.state);
+            if (d) return d;
+          }
+        }
+        return null;
+      };
+
+      const getAttrTime = (entityId, attrNames) => {
+        const a = states[entityId]?.attributes || {};
+        for (const k of Object.keys(a)) {
+          const low = k.toLowerCase();
+          if (attrNames.some(x => low.includes(x))) {
+            const d = parseTimeValue(a[k]);
+            if (d) return d;
+          }
+        }
+        return null;
+      };
+
+      const sogliaFVUtileW = 300;
+
+      const slotTime = (slot) => {
+        if (!slot || typeof slot !== 'object') return null;
+        const raw = slot.period_start || slot.periodStart || slot.start || slot.start_time || slot.datetime || slot.time;
+        return parseTimeValue(raw);
+      };
+
+      const slotEnergyKwh = (slot) => {
+        if (!slot || typeof slot !== 'object') return null;
+        const keys = ['pv_estimate', 'pvEstimate', 'estimate', 'energy', 'kwh', 'pv_estimate10', 'pv_estimate90'];
+        for (const k of keys) {
+          const v = parseFloat(slot[k]);
+          if (!isNaN(v)) return v;
+        }
+        return null;
+      };
+
+      const slotPowerW = (slot, durationHours) => {
+        if (!slot || typeof slot !== 'object') return 0;
+        const powerKeys = ['power', 'watts', 'watt', 'pv_power', 'pvPower', 'power_estimate', 'estimated_power'];
+        for (const k of powerKeys) {
+          const v = parseFloat(slot[k]);
+          if (!isNaN(v)) return v;
+        }
+        const e = slotEnergyKwh(slot);
+        if (e !== null && durationHours > 0) return (e / durationHours) * 1000;
+        return 0;
+      };
+
+      const findSolcastForecastSlots = () => {
+        const candidates = [];
+        const ids = Object.keys(states || {}).filter(id => id.toLowerCase().includes('solcast'));
+        for (const id of ids) {
+          const attrs = states[id]?.attributes || {};
+          for (const k of Object.keys(attrs)) {
+            const val = attrs[k];
+            if (!Array.isArray(val) || val.length < 2) continue;
+            const usable = val.filter(x => x && typeof x === 'object' && slotTime(x));
+            if (usable.length >= 2) candidates.push(usable);
+          }
+        }
+        candidates.sort((a, b) => b.length - a.length);
+        return candidates[0] || [];
+      };
+
+      const calcUsefulFvWindow = () => {
+        const slotsRaw = findSolcastForecastSlots();
+        if (!slotsRaw.length) return null;
+
+        const todayKey = now.toDateString();
+        const slots = slotsRaw
+          .map((slot) => ({ slot, t: slotTime(slot) }))
+          .filter(x => x.t && x.t.toDateString() === todayKey)
+          .sort((a, b) => a.t - b.t);
+
+        if (slots.length < 2) return null;
+
+        const useful = [];
+        for (let i = 0; i < slots.length; i++) {
+          const t = slots[i].t;
+          const next = i < slots.length - 1 ? slots[i + 1].t : new Date(t.getTime() + 30 * 60 * 1000);
+          const durationHours = Math.max((next - t) / 3600000, 0.5);
+          const powerW = slotPowerW(slots[i].slot, durationHours);
+          if (powerW >= sogliaFVUtileW) {
+            useful.push({ start: t, end: next, powerW });
+          }
+        }
+
+        if (!useful.length) return null;
+        return {
+          start: useful[0].start,
+          end: useful[useful.length - 1].end,
+          found: true
+        };
+      };
+
+      const usefulWindow = calcUsefulFvWindow();
+
+      let fvStart = usefulWindow?.start ||
+        parseTimeValue(states['sensor.solcast_pv_forecast_inizio_produzione_oggi']?.state) ||
+        parseTimeValue(states['sensor.solcast_pv_forecast_produzione_inizio_oggi']?.state) ||
+        parseTimeValue(states['sensor.solcast_pv_forecast_start_production_today']?.state) ||
+        findTimeState(['solcast','inizio','produzione']) ||
+        findTimeState(['solcast','start','production']) ||
+        getAttrTime('sensor.solcast_pv_forecast_previsione_per_oggi', ['inizio','start']);
+
+      let fvEnd = usefulWindow?.end ||
+        parseTimeValue(states['sensor.solcast_pv_forecast_fine_produzione_oggi']?.state) ||
+        parseTimeValue(states['sensor.solcast_pv_forecast_produzione_fine_oggi']?.state) ||
+        parseTimeValue(states['sensor.solcast_pv_forecast_end_production_today']?.state) ||
+        findTimeState(['solcast','fine','produzione']) ||
+        findTimeState(['solcast','end','production']) ||
+        getAttrTime('sensor.solcast_pv_forecast_previsione_per_oggi', ['fine','end']);
+
+      // Fallback: se non sono disponibili slot Solcast dettagliati, mantiene una finestra prudente.
+      if (!fvStart) { fvStart = new Date(now); fvStart.setHours(6, 30, 0, 0); }
+      if (!fvEnd) { fvEnd = new Date(now); fvEnd.setHours(20, 30, 0, 0); }
+      if (fvEnd <= fvStart) fvEnd = new Date(fvStart.getTime() + 12 * 60 * 60 * 1000);
+
+      const totalFvMs = Math.max(1, fvEnd - fvStart);
+      const elapsedFvMs = Math.min(Math.max(now - fvStart, 0), totalFvMs);
+      const fvWindowPerc = Math.round((elapsedFvMs / totalFvMs) * 100);
+      const remainingFvMs = Math.max(0, fvEnd - now);
+      const remainH = Math.floor(remainingFvMs / 3600000);
+      const remainM = Math.floor((remainingFvMs % 3600000) / 60000);
+      const fvStartTxt = fvStart.toLocaleTimeString('it-IT', {hour:'2-digit', minute:'2-digit'});
+      const fvEndTxt = fvEnd.toLocaleTimeString('it-IT', {hour:'2-digit', minute:'2-digit'});
+      const nowTxt = now.toLocaleTimeString('it-IT', {hour:'2-digit', minute:'2-digit'});
+      const remainTxt = now < fvStart
+        ? 'deve ancora iniziare'
+        : now > fvEnd
+          ? 'produzione utile conclusa'
+          : `${remainH}h ${String(remainM).padStart(2,'0')}m utili rimanenti`;
+      const fvWindowSource = usefulWindow?.found
+        ? `Calcolata dagli slot Solcast sopra ${sogliaFVUtileW} W`
+        : 'Fallback: orari produzione Solcast / default';
+
+      const updated = now.toLocaleString('it-IT', { day:'2-digit', month:'2-digit', year:'numeric', hour:'2-digit', minute:'2-digit', second:'2-digit' });
+
+      return `
+        <div class="ecc-wrap">
+          <div class="ecc-head">
+            <div class="brand">
+              <div class="brand-icon">☀️</div>
+              <div>
+                <div class="title">Energy Control Center</div>
+                <div class="sub">Panoramica impianto • dati live • analisi mese • decisione operativa</div>
+              </div>
+            </div>
+            <div class="score" style="border-color:${colore};">
+              <div class="score-main" style="color:${colore};">● ${score}/100 • ${voto}</div>
+              <div class="score-sub">Indice di performance</div>
+            </div>
+          </div>
+
+          <div class="row-main">
+            <div class="panel production">
+              <div class="panel-title">☀️ Produzione oggi</div>
+              <div class="prod-line"><span>${prodOggi.toFixed(1)}</span><b>/ ${prevOggi.toFixed(1)} kWh</b></div>
+              <div class="bar"><div class="bar-fill" style="width:${percBar}%;background:linear-gradient(90deg,#ffca28,${colore});"></div></div>
+              <div class="kv"><span>Previsione raggiunta</span><b>${percPrev.toFixed(0)}%</b></div>
+              <div class="kv"><span>Ancora stimati oggi</span><b>${rimOggi.toFixed(1)} kWh</b></div>
+            </div>
+
+            <div class="panel status">
+              <div class="panel-title wide-title">⚙️ Stato impianto <small>live + mese</small><em>Dati live sopra • mese sotto</em></div>
+              <div class="status-grid">
+                <div class="mini"><span>🔋 Batteria ora</span><b class="good-text">${batt.toFixed(0)}%</b></div>
+                <div class="mini"><span>🏠 Casa ora</span><b class="warn-text">${fmtW(casa)}</b></div>
+                <div class="mini"><span>⚡ Rete ora</span><b>${reteNow}</b></div>
+                <div class="mini"><span>📤 Export mese</span><b class="purple-text">${exportMese.toFixed(1)} kWh</b></div>
+                <div class="mini"><span>📥 Import mese</span><b class="blue-text">${importMese.toFixed(1)} kWh</b></div>
+                <div class="mini"><span>📈 Autosuff. mese</span><b class="good-text">${autosuffMese.toFixed(0)}%</b></div>
+              </div>
+              <div class="status-pill">${copertura}</div>
+            </div>
+
+            <div class="panel decision">
+              <div class="decision-head">
+                <div class="panel-title">🧠 Decisione operativa AI</div>
+                <div class="shield">ϟ</div>
+              </div>
+              <div class="decision-title ${decisionClass}">${titoloDecisione}</div>
+              <div class="decision-text">${testoDecisione}</div>
+              <div class="decision-sep"></div>
+              <div class="conv-row"><span>Convenienza carichi ora</span><b style="color:${convColor};">${convScore}/100</b></div>
+              <div class="conv-bar"><div class="conv-fill" style="width:${convScore}%;"></div><i style="left:calc(${convScore}% - 8px);background:${convColor};"></i></div>
+            </div>
+          </div>
+
+          <div class="money-strip">
+            <div class="money"><i>🐷</i><span>Beneficio</span><b class="good-text">${fmtEuro(beneficio)}</b></div>
+            <div class="money"><i>💰</i><span>Con FV</span><b>${fmtEuro(bollettaConFv)}</b></div>
+            <div class="money"><i>📋</i><span>Senza FV</span><b>${fmtEuro(bollettaSenzaFv)}</b></div>
+            <div class="money"><i>📈</i><span>Beneficio stimato<br>fine mese</span><b class="blue-text">${fmtEuro(beneficioFine)}</b></div>
+            <div class="money"><i>🌱</i><span>SSP stimato</span><b>${fmtEuro(ssp)}</b></div>
+          </div>
+
+          <div class="bottom-row">
+            <div class="panel today">
+              <div class="panel-title big">🗓️ Oggi</div>
+              <div class="today-inner">
+                <div class="today-list">
+                  <div><span>🕘 Potenza ora</span><b>${fmtW(pv)} FV • <em>${fmtW(casa)} casa</em></b></div>
+                  <div><span>🕘 +30 min previsto</span><b>${fmtW(pot30)} ${pot30 > pv ? '↑' : pot30 < pv ? '↓' : '='}</b></div>
+                  <div><span>🕘 +1 ora previsto</span><b>${fmtW(pot1h)} ${pot1h > pv ? '↑' : pot1h < pv ? '↓' : '='}</b></div>
+                  <div><span>📈 Picco raggiunto oggi</span><b class="good-text">${fmtW(piccoRaggiunto)}</b></div>
+                  <div><span>📉 Picco previsto oggi</span><b class="blue-text">${fmtW(piccoPrev)} • ${oraPicco}</b></div>
+                  <div><span>🗓️ Domani previsione</span><b class="blue-text">${domani.toFixed(1)} kWh</b></div>
+                  <div><span>🔋 Batteria ora</span><b class="good-text">${batt.toFixed(0)}% • sera ${seraLabel.toLowerCase()}</b></div>
+                </div>
+                <div class="fv-window">
+                  <div class="fv-window-title">☀️ Finestra FV utile</div>
+                  <div class="fv-track">
+                    <div class="fv-fill" style="width:${fvWindowPerc}%;"></div>
+                    <div class="fv-dot" style="left:calc(${fvWindowPerc}% - 8px);">☀️</div>
+                  </div>
+                  <div class="fv-times">
+                    <span>${fvStartTxt}</span>
+                    <b>${nowTxt}</b>
+                    <span>${fvEndTxt}</span>
+                  </div>
+                  <div class="fv-remain">${remainTxt}</div>
+                  <small>${fvWindowSource}</small>
+                </div>
+              </div>
+            </div>
+
+            <div class="panel quick">
+              <div class="panel-title big">📊 Parametri rapidi</div>
+              <div class="quick-grid">
+                <div class="q"><div>〽️</div><span>Potenza ora</span><b class="good-text">${fmtW(pv)}</b><small>FV istantanea</small></div>
+                <div class="q"><div>🏠</div><span>Casa ora</span><b class="warn-text">${fmtW(casa)}</b><small>Consumo</small></div>
+                <div class="q"><div>⚡</div><span>Rete ora</span><b class="blue-text">${reteNow}</b><small>CT reale</small></div>
+                <div class="q"><div>🌙</div><span>Sera stimata</span><b class="good-text">${seraLabel}</b><small>copertura</small></div>
+                <div class="q"><div>☀️</div><span>Domani</span><b class="blue-text">${domani.toFixed(1)} kWh</b><small>Previsione</small></div>
+              </div>
+            </div>
+          </div>
+
+          <div class="footer">
+            <span>🔄 Aggiornato: ${updated}</span>
+            <span>● Dati in tempo reale</span>
+            <span>🛢️ Fonte: Inverter + Solcast + Home Assistant</span>
+          </div>
+        </div>
+      `;
+    ]]]
+styles:
+  card:
+    - width: 1440px
+    - max-width: 94vw
+    - height: 650px
+    - overflow: hidden
+    - border-radius: 28px
+    - padding: 0
+    - color: white
+    - background: >-
+        linear-gradient(135deg, rgba(0,70,46,.78), rgba(8,18,22,.98) 45%,
+        rgba(7,42,54,.92))
+    - border: 1px solid rgba(0,255,170,.35)
+    - box-shadow: 0 14px 34px rgba(0,0,0,.45)
+  grid:
+    - grid-template-areas: content
+    - grid-template-columns: 1fr
+    - grid-template-rows: 1fr
+  custom_fields:
+    content:
+      - width: 100%
+      - height: 100%
+      - text-align: left
+extra_styles: |
+  .ecc-wrap {
+    box-sizing: border-box;
+    width: 100%;
+    height: 100%;
+    padding: 14px 20px 7px;
+    display: grid;
+    grid-template-rows: 54px 206px 66px 180px 22px;
+    gap: 8px;
+    font-family: var(--paper-font-body1_-_font-family);
+  }
+
+  .ecc-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+
+  .brand {
+    display: flex;
+    align-items: center;
+    gap: 13px;
+  }
+
+  .brand-icon {
+    width: 50px;
+    height: 50px;
+    display: grid;
+    place-items: center;
+    border-radius: 15px;
+    font-size: 23px;
+    background: rgba(255,202,40,.12);
+    border: 1px solid rgba(255,202,40,.25);
+  }
+
+  .title {
+    font-size: 23px;
+    line-height: 1;
+    font-weight: 900;
+    letter-spacing: -.5px;
+  }
+
+  .sub {
+    margin-top: 6px;
+    font-size: 12px;
+    opacity: .72;
+    font-weight: 500;
+  }
+
+  .score {
+    min-width: 230px;
+    padding: 10px 18px 8px;
+    border-radius: 20px;
+    background: rgba(0,0,0,.18);
+    border: 1px solid rgba(53,255,118,.75);
+    text-align: center;
+  }
+
+  .score-main {
+    font-size: 17px;
+    font-weight: 900;
+  }
+
+  .score-sub {
+    margin-top: 3px;
+    font-size: 10px;
+    opacity: .78;
+  }
+
+  .row-main {
+    display: grid;
+    grid-template-columns: 370px 1fr 530px;
+    gap: 10px;
+    min-width: 0;
+  }
+
+  .panel {
+    border-radius: 22px;
+    padding: 13px;
+    background: rgba(255,255,255,.07);
+    border: 1px solid rgba(255,255,255,.12);
+    overflow: hidden;
+  }
+
+  .panel-title {
+    font-size: 14px;
+    font-weight: 900;
+    margin-bottom: 11px;
+    color: rgba(255,255,255,.95);
+  }
+
+  .panel-title small {
+    font-size: 12px;
+    opacity: .72;
+    font-weight: 700;
+  }
+
+  .wide-title {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+  }
+
+  .wide-title em {
+    margin-left: auto;
+    padding: 5px 10px;
+    border-radius: 999px;
+    font-style: normal;
+    font-size: 10px;
+    color: #35ff76;
+    background: rgba(53,255,118,.08);
+    border: 1px solid rgba(53,255,118,.35);
+  }
+
+  .prod-line {
+    display: flex;
+    align-items: baseline;
+    gap: 10px;
+    margin-top: 2px;
+  }
+
+  .prod-line span {
+    font-size: 40px;
+    font-weight: 950;
+    letter-spacing: -1px;
+  }
+
+  .prod-line b {
+    font-size: 17px;
+    opacity: .75;
+  }
+
+  .bar {
+    height: 10px;
+    border-radius: 999px;
+    background: rgba(255,255,255,.14);
+    overflow: hidden;
+    margin: 14px 0 16px;
+  }
+
+  .bar-fill {
+    height: 100%;
+    border-radius: 999px;
+  }
+
+  .kv {
+    display: flex;
+    justify-content: space-between;
+    font-size: 11px;
+    line-height: 1.65;
+  }
+
+  .kv span {
+    opacity: .7;
+  }
+
+  .kv b {
+    font-size: 11px;
+  }
+
+  .status-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 8px;
+  }
+
+  .mini {
+    border-radius: 15px;
+    padding: 8px 10px;
+    background: rgba(255,255,255,.075);
+    min-height: 40px;
+  }
+
+  .mini span {
+    display: block;
+    font-size: 11px;
+    opacity: .72;
+  }
+
+  .mini b {
+    display: block;
+    margin-top: 4px;
+    font-size: 15px;
+    white-space: nowrap;
+  }
+
+  .status-pill {
+    margin-top: 7px;
+    padding: 6px 10px;
+    border-radius: 999px;
+    text-align: center;
+    font-size: 11px;
+    line-height: 1.1;
+    background: rgba(0,0,0,.18);
+    opacity: .86;
+  }
+
+  .decision {
+    padding: 16px;
+  }
+
+  .decision-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: start;
+  }
+
+  .shield {
+    width: 50px;
+    height: 50px;
+    display: grid;
+    place-items: center;
+    border-radius: 20px;
+    color: #35ff76;
+    border: 4px solid rgba(53,255,118,.75);
+    font-size: 34px;
+    font-weight: 900;
+    opacity: .9;
+  }
+
+  .decision-title {
+    margin-top: 4px;
+    font-size: 26px;
+    font-weight: 950;
+    letter-spacing: -.5px;
+  }
+
+  .decision-text {
+    margin-top: 5px;
+    font-size: 15px;
+    line-height: 1.28;
+    font-weight: 700;
+    max-width: 470px;
+  }
+
+  .decision-sep {
+    height: 1px;
+    background: rgba(255,255,255,.13);
+    margin: 10px 0 8px;
+  }
+
+  .conv-row {
+    display: flex;
+    justify-content: space-between;
+    font-size: 12px;
+    opacity: .82;
+  }
+
+  .conv-row b {
+    font-size: 19px;
+    opacity: 1;
+  }
+
+  .conv-bar {
+    position: relative;
+    height: 8px;
+    border-radius: 999px;
+    background: rgba(255,255,255,.14);
+    margin-top: 7px;
+  }
+
+  .conv-fill {
+    height: 100%;
+    border-radius: 999px;
+    background: linear-gradient(90deg,#ff5252,#ffca28,#35ff76);
+  }
+
+  .conv-bar i {
+    position: absolute;
+    top: -3px;
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    border: 2px solid white;
+    background: #35ff76;
+  }
+
+  .money-strip {
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    gap: 0;
+    border-radius: 22px;
+    padding: 10px 18px;
+    background: rgba(255,255,255,.07);
+    border: 1px solid rgba(255,255,255,.12);
+  }
+
+  .money {
+    display: grid;
+    grid-template-columns: 42px 1fr;
+    grid-template-rows: 18px 1fr;
+    column-gap: 12px;
+    align-items: center;
+    border-right: 1px solid rgba(255,255,255,.15);
+    padding: 0 14px;
+  }
+
+  .money:last-child { border-right: none; }
+
+  .money i {
+    grid-row: 1 / span 2;
+    width: 38px;
+    height: 38px;
+    display: grid;
+    place-items: center;
+    border-radius: 14px;
+    background: rgba(0,0,0,.18);
+    font-style: normal;
+    font-size: 21px;
+  }
+
+  .money span {
+    font-size: 12px;
+    opacity: .72;
+    line-height: 1.15;
+  }
+
+  .money b {
+    font-size: 23px;
+    font-weight: 950;
+  }
+
+  .bottom-row {
+    display: grid;
+    grid-template-columns: 1fr 1.1fr;
+    gap: 10px;
+    min-width: 0;
+  }
+
+  .big {
+    font-size: 17px;
+    margin-bottom: 7px;
+  }
+
+  .today-inner {
+    display: grid;
+    grid-template-columns: 1fr 190px;
+    gap: 14px;
+    height: calc(100% - 30px);
+  }
+
+  .today-list {
+    border-top: 1px solid rgba(255,255,255,.13);
+    padding-top: 7px;
+  }
+
+  .today-list div {
+    display: grid;
+    grid-template-columns: 178px 1fr;
+    gap: 16px;
+    font-size: 12px;
+    line-height: 1.40;
+  }
+
+  .today-list span {
+    opacity: .75;
+  }
+
+  .today-list b {
+    font-size: 11.5px;
+  }
+
+  .today-list em {
+    color: #ffb74d;
+    font-style: normal;
+  }
+
+  .fv-window {
+    display: grid;
+    align-content: center;
+    text-align: center;
+    padding: 10px 10px 8px;
+    border-radius: 18px;
+    background: rgba(0,0,0,.16);
+    border: 1px solid rgba(255,255,255,.10);
+    min-width: 0;
+  }
+
+  .fv-window-title {
+    font-size: 11px;
+    font-weight: 900;
+    opacity: .88;
+    margin-bottom: 10px;
+  }
+
+  .fv-track {
+    position: relative;
+    height: 10px;
+    border-radius: 999px;
+    background: rgba(255,255,255,.15);
+    overflow: visible;
+    margin: 6px 4px 9px;
+  }
+
+  .fv-fill {
+    height: 100%;
+    border-radius: 999px;
+    background: linear-gradient(90deg,#ffca28,#35ff76,#42a5f5);
+  }
+
+  .fv-dot {
+    position: absolute;
+    top: -17px;
+    width: 22px;
+    height: 22px;
+    display: grid;
+    place-items: center;
+    font-size: 17px;
+    filter: drop-shadow(0 0 5px rgba(255,202,40,.55));
+  }
+
+  .fv-times {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    align-items: center;
+    margin-top: 6px;
+  }
+
+  .fv-times span {
+    font-size: 10px;
+    opacity: .65;
+  }
+
+  .fv-times b {
+    font-size: 13px;
+    color: #ffca28;
+  }
+
+  .fv-remain {
+    margin-top: 8px;
+    font-size: 13px;
+    font-weight: 850;
+    color: #35ff76;
+    white-space: nowrap;
+  }
+
+  .fv-window small {
+    margin-top: 6px;
+    font-size: 9.5px;
+    opacity: .55;
+  }
+
+  .quick-grid {
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    gap: 10px;
+    height: calc(100% - 42px);
+  }
+
+  .q {
+    border-radius: 16px;
+    background: rgba(255,255,255,.075);
+    display: grid;
+    align-content: center;
+    justify-items: center;
+    text-align: center;
+    padding: 9px;
+  }
+
+  .q div {
+    font-size: 29px;
+    line-height: 1;
+    margin-bottom: 7px;
+  }
+
+  .q span {
+    font-size: 11px;
+    opacity: .78;
+  }
+
+  .q b {
+    font-size: 17px;
+    margin-top: 6px;
+    white-space: nowrap;
+  }
+
+  .q small {
+    margin-top: 7px;
+    font-size: 10px;
+    opacity: .62;
+  }
+
+  .footer {
+    border-top: 1px solid rgba(255,255,255,.10);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 42px;
+    font-size: 11px;
+    opacity: .76;
+    padding-bottom: 2px;
+  }
+
+  .good, .good-text { color: #35ff76 !important; }
+  .warn, .warn-text { color: #ffb74d !important; }
+  .danger, .danger-text { color: #ff6b6b !important; }
+  .blue, .blue-text { color: #42a5f5 !important; }
+  .purple-text { color: #b76cff !important; }
+
+  @media (max-width: 1200px) {
+    .ecc-wrap {
+      transform: scale(.82);
+      transform-origin: top left;
+      width: 1500px;
+    }
+  }
