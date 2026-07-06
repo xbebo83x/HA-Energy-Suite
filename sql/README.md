@@ -1,111 +1,140 @@
-# 📊 SQL Sensors
+# 📊 Sensori SQL
 
-Benvenuto!
+Questa cartella contiene il file:
 
-Questa cartella contiene i sensori SQL utilizzati da **HA Energy Suite**.
+```text
+sql/energy-sql.yaml
+```
 
-Questi sensori leggono il database di Home Assistant per recuperare i dati storici della Dashboard Energia.
+Questo file crea i sensori SQL usati dalle card che richiedono dati storici della Dashboard Energia di Home Assistant.
 
-Non preoccuparti se non hai mai usato SQL: ti guideremo passo dopo passo.
+Le card restano indipendenti.  
+Il file SQL va installato solo se la card che vuoi usare lo richiede.
 
 ---
 
-# ❓ Cos'è un sensore SQL?
+# ❓ A cosa serve questo file?
 
-Un sensore SQL è un normale sensore di Home Assistant che, invece di leggere un dispositivo fisico, legge i dati già salvati nel database interno di Home Assistant.
+Home Assistant salva lo storico energetico nel proprio database interno.
 
-HA Energy Suite li usa per recuperare:
+I sensori SQL leggono quel database e ricostruiscono dati come:
 
 - produzione fotovoltaica mensile;
+- consumo casa mensile;
 - energia acquistata dalla rete;
 - energia immessa in rete;
-- consumo della casa;
-- report mensili;
-- report annuali.
+- dati utili per report mensili e annuali.
+
+Questi sensori non leggono direttamente inverter, contatori o dispositivi fisici.  
+Leggono i dati già registrati dalla Dashboard Energia di Home Assistant.
 
 ---
 
 # 📋 Requisiti
 
-Prima di iniziare assicurati di avere:
+Prima di installare questo file devi avere:
 
 - Home Assistant funzionante;
-- Dashboard Energia configurata;
-- Visual Studio Code Server installato, oppure accesso al Terminale;
-- accesso al file `configuration.yaml`.
+- Dashboard Energia già configurata;
+- dati storici presenti nella Dashboard Energia;
+- accesso al file `configuration.yaml`;
+- accesso a Visual Studio Code Server, File Editor o Terminale.
 
 ---
 
-# 🚀 Installazione
+# 📁 Struttura del repository
 
-## Passo 1 - Copia il file
-
-Copia il file:
+Nel repository il file si trova qui:
 
 ```text
-energy-sql.yaml
+sql/
+├── energy-sql.yaml
+└── README.md
 ```
 
-nella cartella:
+Le card invece si trovano nella cartella:
+
+```text
+cards/
+├── annual-report/
+├── energy-control-center/
+└── monthly-report/
+```
+
+Le card sono solo interfacce grafiche.  
+Non vanno copiate dentro `configuration.yaml`.
+
+---
+
+# 🚀 Installazione SQL
+
+## Passo 1 - Crea la cartella SQL in Home Assistant
+
+In Home Assistant crea questa cartella:
 
 ```text
 /config/sql/
 ```
 
-Se la cartella `sql` non esiste, creala manualmente.
+Se esiste già, puoi usare quella.
+
+---
+
+## Passo 2 - Copia il file
+
+Copia il file del repository:
+
+```text
+sql/energy-sql.yaml
+```
+
+dentro Home Assistant in:
+
+```text
+/config/sql/energy-sql.yaml
+```
 
 La struttura finale deve essere questa:
 
 ```text
-/config
-│
+/config/
 ├── configuration.yaml
-│
-├── sql
-│   └── energy-sql.yaml
+└── sql/
+    └── energy-sql.yaml
 ```
 
 ---
 
-## Passo 2 - Modifica `configuration.yaml`
+## Passo 3 - Richiama il file in `configuration.yaml`
 
-Apri il file:
+Apri:
 
 ```text
 /config/configuration.yaml
 ```
 
-Devi aggiungere questa riga:
+Aggiungi questa riga:
 
 ```yaml
 sql: !include sql/energy-sql.yaml
 ```
 
-La riga va inserita **allineata a sinistra**, senza spazi prima.
+La riga deve stare al livello principale del file, senza spazi davanti.
 
 Esempio corretto:
 
 ```yaml
-homeassistant:
-
 default_config:
 
 frontend:
+  themes: !include_dir_merge_named themes
+
+automation: !include automations.yaml
+script: !include scripts.yaml
+scene: !include scenes.yaml
 
 sql: !include sql/energy-sql.yaml
 ```
-
-Anche così va bene:
-
-```yaml
-default_config:
-
-template: !include templates/core-sensors.yaml
-utility_meter: !include utility_meters/utility_meters.yaml
-sql: !include sql/energy-sql.yaml
-```
-
-Non inserirla dentro un'altra sezione.
 
 Esempio sbagliato:
 
@@ -121,15 +150,39 @@ sensor:
   sql: !include sql/energy-sql.yaml
 ```
 
-La voce `sql:` deve stare al livello principale del file, come `template:`, `sensor:`, `utility_meter:` o `automation:`.
+---
 
-Salva il file.
+# ⚠️ Importante
+
+Il file `energy-sql.yaml` è pensato per essere richiamato così:
+
+```yaml
+sql: !include sql/energy-sql.yaml
+```
+
+Per questo motivo dentro `energy-sql.yaml` non deve esserci una seconda voce iniziale:
+
+```yaml
+sql:
+```
+
+Il file deve contenere direttamente l'elenco dei sensori SQL.
+
+Esempio corretto dentro `energy-sql.yaml`:
+
+```yaml
+- name: FV 2026 01 Produzione DB
+  unique_id: fv_2026_01_produzione_db
+  db_url: sqlite:////config/home-assistant_v2.db
+  query: >
+    ...
+```
 
 ---
 
-## ⚠ Se hai già una sezione `sql:`
+# ⚠️ Se hai già una sezione `sql:`
 
-Nel file `configuration.yaml` può esistere **una sola voce `sql:`**.
+Nel file `configuration.yaml` può esserci una sola voce `sql:`.
 
 Questo è corretto:
 
@@ -144,29 +197,25 @@ sql: !include sql/energy-sql.yaml
 sql: !include altri_sensori.yaml
 ```
 
-Se hai già una riga `sql:` nel tuo `configuration.yaml`, non aggiungerne un'altra.
-
-In quel caso devi copiare il contenuto di `energy-sql.yaml` dentro il file SQL che stai già usando.
+Se hai già una configurazione SQL, devi unire i sensori in un unico file oppure copiare il contenuto di `energy-sql.yaml` nel file SQL che stai già usando.
 
 ---
 
-## Passo 3 - Trova i numeri dei tuoi sensori
+# 🔎 Trovare i tuoi `metadata_id`
 
-Questa è l'unica parte personalizzata.
+Ogni impianto Home Assistant ha numeri diversi.
 
-Apri **Visual Studio Code Server**.
+Nel file `energy-sql.yaml` devi sostituire i `metadata_id` con quelli del tuo impianto.
 
-Apri il **Terminale**.
+## Metodo con Terminale
 
-Digita:
+Apri il Terminale di Home Assistant e digita:
 
 ```bash
 sqlite3 /config/home-assistant_v2.db
 ```
 
-e premi **Invio**.
-
-Ora incolla questo comando:
+Poi esegui questa query:
 
 ```sql
 SELECT id, statistic_id
@@ -174,19 +223,16 @@ FROM statistics_meta
 ORDER BY statistic_id;
 ```
 
-Premi di nuovo **Invio**.
-
-Comparirà una lista lunga, simile a questa:
+Vedrai un elenco simile a questo:
 
 ```text
 265|sensor.inverter_total_production
 269|sensor.inverter_total_energy_import
 270|sensor.inverter_total_energy_export
 274|sensor.inverter_total_load_consumption
-...
 ```
 
-Quei numeri a sinistra sono i `metadata_id`.
+Il numero a sinistra è il `metadata_id`.
 
 Per uscire dal database scrivi:
 
@@ -194,38 +240,47 @@ Per uscire dal database scrivi:
 .quit
 ```
 
-e premi **Invio**.
+---
+
+# 🧩 Quali sensori devi trovare
+
+Nel file devi individuare i `metadata_id` relativi a:
+
+```text
+Produzione FV
+Consumo Casa
+Import Rete
+Export Rete
+```
+
+Di solito corrispondono ai sensori usati nella Dashboard Energia di Home Assistant.
 
 ---
 
-## Passo 4 - Lascia fare a ChatGPT 😄
+# 🤖 Aiuto con ChatGPT
 
-Non cercare manualmente i sensori.
+Se non vuoi modificare il file a mano, puoi fare così:
 
-Copia tutto l'elenco restituito dal Terminale.
+1. esegui la query sul database;
+2. copia tutto l'elenco dei risultati;
+3. copia anche il contenuto di `energy-sql.yaml`;
+4. chiedi a ChatGPT:
 
-Poi apri ChatGPT e incolla:
+```text
+Questo è l'elenco dei miei sensori Home Assistant e questo è il file energy-sql.yaml.
+Sostituisci i metadata_id con quelli corretti per Produzione FV, Consumo Casa, Import Rete ed Export Rete.
+Non modificare altro.
+```
 
-- l'elenco dei sensori;
-- il contenuto del file `energy-sql.yaml`.
-
-Scrivi questo messaggio:
-
-> Questo è l'elenco dei miei sensori di Home Assistant e questo è il file `energy-sql.yaml` di HA Energy Suite. Sostituisci automaticamente tutti i `metadata_id` con quelli corretti del mio impianto senza modificare nient'altro.
-
-ChatGPT ti restituirà il file già modificato.
-
-Copia il risultato dentro il tuo file:
+Poi incolla il file corretto in:
 
 ```text
 /config/sql/energy-sql.yaml
 ```
 
-e salva.
-
 ---
 
-## Passo 5 - Controlla la configurazione
+# ✅ Controllo configurazione
 
 Prima di riavviare Home Assistant vai in:
 
@@ -233,15 +288,15 @@ Prima di riavviare Home Assistant vai in:
 Impostazioni → Sistema → Controlla configurazione
 ```
 
-Se non vengono segnalati errori puoi procedere.
+Se non ci sono errori, puoi riavviare.
 
 ---
 
-## Passo 6 - Riavvia Home Assistant
+# 🔄 Riavvio
 
 Riavvia Home Assistant.
 
-Se tutto è corretto, i sensori SQL verranno creati automaticamente.
+Dopo il riavvio, i sensori SQL verranno creati automaticamente.
 
 ---
 
@@ -250,69 +305,73 @@ Se tutto è corretto, i sensori SQL verranno creati automaticamente.
 Vai in:
 
 ```text
-Impostazioni → Dispositivi e Servizi → Entità
+Impostazioni → Dispositivi e servizi → Entità
 ```
 
-e cerca uno dei sensori creati da HA Energy Suite.
+Cerca i sensori SQL creati dal file.
 
-Se il sensore mostra un valore, la configurazione è corretta.
+Se i sensori esistono e mostrano un valore, la configurazione è corretta.
 
 ---
 
 # ❌ Problemi comuni
 
-## I sensori non vengono creati
+## I sensori non compaiono
 
 Controlla che:
 
-- `energy-sql.yaml` sia in `/config/sql/`;
-- `configuration.yaml` contenga questa riga:
+- il file sia davvero in `/config/sql/energy-sql.yaml`;
+- in `configuration.yaml` ci sia questa riga:
 
 ```yaml
 sql: !include sql/energy-sql.yaml
 ```
 
-- la riga `sql:` sia allineata a sinistra;
+- la riga `sql:` sia senza spazi davanti;
 - Home Assistant sia stato riavviato.
 
 ---
 
-## Home Assistant non si avvia
+## Home Assistant segnala errore YAML
 
-Probabilmente la riga `sql:` è stata inserita nel punto sbagliato oppure c'è un errore di spaziatura.
+Controlla che:
 
-Ricorda:
-
-```yaml
-sql: !include sql/energy-sql.yaml
-```
-
-deve stare al livello principale del file, senza spazi davanti.
+- non esistano due sezioni `sql:` in `configuration.yaml`;
+- il file `energy-sql.yaml` non inizi con `sql:`;
+- l'indentazione del file non sia stata modificata.
 
 ---
 
-## I sensori risultano "Unavailable"
+## I sensori sono `unavailable`
 
-Nella maggior parte dei casi i numeri dei sensori non sono corretti.
+Di solito significa che i `metadata_id` non sono corretti.
 
-Ripeti il Passo 3 e il Passo 4.
+Ripeti la query:
+
+```sql
+SELECT id, statistic_id
+FROM statistics_meta
+ORDER BY statistic_id;
+```
+
+e controlla di aver scelto i sensori giusti.
 
 ---
 
 # 💡 Consiglio
 
-Prima di modificare i file di configurazione, fai sempre un backup di Home Assistant.
+Prima di modificare i file di configurazione fai sempre un backup di Home Assistant.
 
 ---
 
-# ❤️ Hai bisogno di aiuto?
+# 📌 Riassunto rapido
 
-Se incontri difficoltà puoi aprire una **Issue** su GitHub oppure scrivere nel gruppo Facebook dedicato a Home Assistant.
-
-Allega sempre:
-
-- il messaggio di errore;
-- la versione di Home Assistant;
-- uno screenshot del problema.
-
-Buona configurazione con **HA Energy Suite** ☀️
+```text
+1. Copia sql/energy-sql.yaml in /config/sql/energy-sql.yaml
+2. Aggiungi in configuration.yaml:
+   sql: !include sql/energy-sql.yaml
+3. Sostituisci i metadata_id con quelli del tuo impianto
+4. Controlla la configurazione
+5. Riavvia Home Assistant
+6. Installa la card che richiede questi sensori SQL
+```

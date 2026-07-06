@@ -3,14 +3,21 @@
 # HA Energy Suite
 #
 # File:
-# monthly-report.yaml
+# annual-report.yaml
 #
 # Descrizione:
-# Card "Monthly Report".
+# Card "Annual Report" per Home Assistant.
+# Mostra una tabella annuale mese per mese con produzione,
+# consumo, autosufficienza, costi stimati, risparmio e SSP.
 #
 # Requisiti:
 # - custom:button-card
-# - sql/monthly-report-sql.yaml
+# - Sensori SQL configurati tramite sql/energy-sql.yaml
+# - Dashboard Energia di Home Assistant configurata
+#
+# Installazione:
+# Copiare tutto il contenuto di questo file in una Card Manuale
+# della dashboard Lovelace/Home Assistant.
 #
 # Licenza:
 # MIT License
@@ -30,10 +37,244 @@ styles:
     - background: linear-gradient(135deg, rgba(0,120,90,0.22), rgba(10,18,24,0.96))
     - border: 1px solid rgba(0,255,160,0.25)
     - box-shadow: 0 10px 28px rgba(0,0,0,0.35)
+custom_fields:
+  content: |
+    [[[ 
+      const n = e => parseFloat(states[e]?.state) || 0;
 
-# =====================================================================
-# INCOLLA QUI SOTTO, SENZA MODIFICHE, IL CODICE DELLA TUA CARD.
-#
-# La logica della card rimane identica alla versione originale.
-# Per GitHub è stata aggiunta solamente questa intestazione.
-# =====================================================================
+      const kwh = v => v > 0 ? v.toFixed(0) : '—';
+      const pct = v => v > 0 ? `${v.toFixed(0)}%` : '—';
+      const eur = v => v > 0 ? `${v.toFixed(0)}€` : '—';
+
+      // ========================================================
+      // PERSONALIZZAZIONE
+      // Modifica solo questi tre valori in base alla tua bolletta
+      // ========================================================
+      const costoKwh = 0.25;        // Costo finale di 1 kWh acquistato in euro
+      const quotaFissaMese = 18.00; // Quota fissa media mensile in euro
+      const sspKwh = 0.15;          // Valore medio SSP per ogni kWh immesso in euro
+      // ========================================================
+
+      const meseCorrente = new Date().getMonth() + 1;
+      const annoCorrente = new Date().getFullYear();
+
+      const calc = (cons, imp, exp) => {
+        const auto = cons > 0 ? ((cons - imp) / cons) * 100 : 0;
+        const senzaFV = (cons * costoKwh) + quotaFissaMese;
+        const conFV = (imp * costoKwh) + quotaFissaMese;
+        const risparmio = senzaFV - conFV;
+        const ssp = exp * sspKwh;
+        return { auto, senzaFV, conFV, risparmio, ssp };
+      };
+
+      const datiMese = m => {
+        const mm = String(m).padStart(2, '0');
+        const prod = n(`sensor.fv_2026_${mm}_produzione_db`);
+        const cons = n(`sensor.fv_2026_${mm}_consumo_db`);
+        const imp = n(`sensor.fv_2026_${mm}_import_db`);
+        const exp = n(`sensor.fv_2026_${mm}_export_db`);
+        const c = calc(cons, imp, exp);
+        return {
+          prod,
+          cons,
+          imp,
+          exp,
+          auto: c.auto,
+          senzaFV: c.senzaFV,
+          conFV: c.conFV,
+          risparmio: c.risparmio,
+          ssp: c.ssp
+        };
+      };
+
+      const vuoto = mese => `
+        <tr>
+          <td class="mese">${mese}</td>
+          <td>—</td>
+          <td>—</td>
+          <td>—</td>
+          <td>—</td>
+          <td>—</td>
+          <td>—</td>
+          <td>—</td>
+        </tr>
+      `;
+
+      const riga = (label, m, live = false) => {
+        const d = datiMese(m);
+
+        if (d.prod <= 0 && d.cons <= 0 && d.imp <= 0 && d.exp <= 0) {
+          return vuoto(label);
+        }
+
+        return `
+          <tr class="${live ? 'live' : ''}">
+            <td class="mese">${label}${live ? '*' : ''}</td>
+            <td>${kwh(d.prod)}</td>
+            <td>${kwh(d.cons)}</td>
+            <td class="green">${pct(d.auto)}</td>
+            <td class="red">${eur(d.senzaFV)}</td>
+            <td class="orange">${eur(d.conFV)}</td>
+            <td class="green">${eur(d.risparmio)}</td>
+            <td class="blue">${eur(d.ssp)}</td>
+          </tr>
+        `;
+      };
+
+      let totProd = 0;
+      let totCons = 0;
+      let totImp = 0;
+      let totExp = 0;
+      let totSenzaFV = 0;
+      let totConFV = 0;
+      let totRisparmio = 0;
+      let totSsp = 0;
+
+      for (let m = 1; m <= 12; m++) {
+        const d = datiMese(m);
+        if (d.prod > 0 || d.cons > 0 || d.imp > 0 || d.exp > 0) {
+          totProd += d.prod;
+          totCons += d.cons;
+          totImp += d.imp;
+          totExp += d.exp;
+          totSenzaFV += d.senzaFV;
+          totConFV += d.conFV;
+          totRisparmio += d.risparmio;
+          totSsp += d.ssp;
+        }
+      }
+
+      const autoAnno = totCons > 0 ? ((totCons - totImp) / totCons) * 100 : 0;
+
+      const totale = `
+        <tr class="total">
+          <td class="mese">Σ 2026</td>
+          <td>${kwh(totProd)}</td>
+          <td>${kwh(totCons)}</td>
+          <td class="green">${pct(autoAnno)}</td>
+          <td class="red">${eur(totSenzaFV)}</td>
+          <td class="orange">${eur(totConFV)}</td>
+          <td class="green">${eur(totRisparmio)}</td>
+          <td class="blue">${eur(totSsp)}</td>
+        </tr>
+      `;
+
+      return `
+        <style>
+          table {
+            width:100%;
+            border-collapse:collapse;
+            table-layout:fixed;
+            font-size:10px;
+            text-align:center;
+          }
+
+          th, td {
+            padding:6px 1px;
+            border-bottom:1px solid rgba(255,255,255,0.08);
+          }
+
+          th {
+            color:rgba(255,255,255,0.58);
+            font-size:9.2px;
+            font-weight:800;
+          }
+
+          .mese {
+            width:36px;
+            text-align:left;
+            font-weight:900;
+            color:white;
+          }
+
+          .green {
+            color:#35ff76;
+            font-weight:900;
+          }
+
+          .red {
+            color:#ff7777;
+            font-weight:900;
+          }
+
+          .orange {
+            color:#ffb74d;
+            font-weight:900;
+          }
+
+          .blue {
+            color:#5ee7ff;
+            font-weight:900;
+          }
+
+          .live {
+            background:rgba(0,255,160,0.08);
+            outline:1px solid rgba(0,255,160,0.25);
+            outline-offset:-1px;
+          }
+
+          .total {
+            background:rgba(255,255,255,0.09);
+            border-top:2px solid rgba(0,255,160,0.35);
+            font-weight:900;
+          }
+
+          .title {
+            text-align:center;
+            font-size:17px;
+            font-weight:900;
+          }
+
+          .subtitle {
+            text-align:center;
+            font-size:10px;
+            color:rgba(255,255,255,0.50);
+            margin:3px 0 12px;
+          }
+
+          .note {
+            margin-top:8px;
+            text-align:center;
+            font-size:9px;
+            color:rgba(255,255,255,0.42);
+          }
+        </style>
+
+        <div class="title">📊 Storico Fotovoltaico 2026</div>
+        <div class="subtitle">database energia · bolletta senza/con FV · risparmio senza SSP</div>
+
+        <table>
+          <thead>
+            <tr>
+              <th class="mese">Mese</th>
+              <th>Prod</th>
+              <th>Cons</th>
+              <th>Auto</th>
+              <th>Senza</th>
+              <th>Con</th>
+              <th>Risp</th>
+              <th>SSP</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${riga('Gen', 1, annoCorrente === 2026 && meseCorrente === 1)}
+            ${riga('Feb', 2, annoCorrente === 2026 && meseCorrente === 2)}
+            ${riga('Mar', 3, annoCorrente === 2026 && meseCorrente === 3)}
+            ${riga('Apr', 4, annoCorrente === 2026 && meseCorrente === 4)}
+            ${riga('Mag', 5, annoCorrente === 2026 && meseCorrente === 5)}
+            ${riga('Giu', 6, annoCorrente === 2026 && meseCorrente === 6)}
+            ${riga('Lug', 7, annoCorrente === 2026 && meseCorrente === 7)}
+            ${riga('Ago', 8, annoCorrente === 2026 && meseCorrente === 8)}
+            ${riga('Set', 9, annoCorrente === 2026 && meseCorrente === 9)}
+            ${riga('Ott', 10, annoCorrente === 2026 && meseCorrente === 10)}
+            ${riga('Nov', 11, annoCorrente === 2026 && meseCorrente === 11)}
+            ${riga('Dic', 12, annoCorrente === 2026 && meseCorrente === 12)}
+            ${totale}
+          </tbody>
+        </table>
+
+        <div class="note">
+          * mese corrente · Risp = senza FV − con FV · SSP escluso dal risparmio
+        </div>
+      `;
+    ]]]
