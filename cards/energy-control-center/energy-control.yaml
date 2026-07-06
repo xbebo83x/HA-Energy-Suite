@@ -53,14 +53,21 @@ custom_fields:
       const autosuffOggi = n('sensor.autosufficienza_oggi');
       const autosuffMese = consumoMese > 0 ? Math.max(0, Math.min(100, ((consumoMese - importMese) / consumoMese) * 100)) : 0;
 
-      const costoKwh = n('input_number.costo_kwh_reale') || 0.25;
-      const quotaGiorno = n('input_number.quota_fissa_giornaliera_corrente') || 0;
-      const canoneTv = n('sensor.canone_tv_mensile') || 0;
-      const sspKwh = n('input_number.fv_valore_ssp_kwh') || 0.15;
+      // ========================================================
+      // PERSONALIZZAZIONE
+      // Modifica solo questi valori in base alla tua bolletta
+      // ========================================================
 
-      const fissi = (quotaGiorno * giorniMese) + canoneTv;
-      const bollettaConFv = (importMese * costoKwh) + fissi;
-      const bollettaSenzaFv = (consumoMese * costoKwh) + fissi;
+      const costoKwh = 0.25;        // Costo finale di 1 kWh acquistato
+      const quotaFissaMese = 18.00; // Quota fissa media mensile della bolletta
+      const sspKwh = 0.15;          // Valore medio SSP per ogni kWh immesso
+
+      // ========================================================
+      // NON MODIFICARE IL RESTO DEL FILE
+      // ========================================================
+
+      const bollettaConFv = (importMese * costoKwh) + quotaFissaMese;
+      const bollettaSenzaFv = (consumoMese * costoKwh) + quotaFissaMese;
       const ssp = exportMese * sspKwh;
       const beneficio = (bollettaSenzaFv - bollettaConFv) + ssp;
       const beneficioFine = giorno > 0 ? beneficio / giorno * giorniMese : beneficio;

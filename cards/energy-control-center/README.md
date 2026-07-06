@@ -1,376 +1,195 @@
-\# ⚡ Energy Control Center
+# ⚡ Energy Control Center
 
+<p align="center">
+  <img src="screenshot.png" alt="Energy Control Center">
+</p>
 
+## Panoramica
 
-> La dashboard più completa di \*\*HA Energy Suite\*\* per monitorare il tuo impianto fotovoltaico in tempo reale.
+**Energy Control Center** è una dashboard completa per Home Assistant progettata per monitorare in tempo reale il proprio impianto fotovoltaico.
 
+In un'unica schermata riunisce tutte le informazioni principali sull'impianto, permettendo di controllare produzione, consumi, batteria, rete elettrica, previsioni di produzione e benefici economici senza dover passare da una dashboard all'altra.
 
+La dashboard utilizza i sensori SQL presenti nella cartella **`/sql`** del repository.
 
-Energy Control Center riunisce in un'unica schermata tutte le informazioni più importanti del tuo impianto, permettendoti di controllare produzione, consumi, batteria, rete, statistiche e convenienza dei carichi senza dover passare da una dashboard all'altra.
+---
 
+# ✨ Funzionalità
 
+La dashboard visualizza:
 
-È pensata per essere la dashboard principale dell'intera suite.
+- ☀️ Produzione fotovoltaica in tempo reale
+- 📈 Confronto tra produzione reale e previsione Solcast
+- 🔋 Stato di carica della batteria
+- 🏠 Consumo istantaneo dell'abitazione
+- ⚡ Import / Export della rete
+- 📊 Autosufficienza energetica
+- 💰 Beneficio economico del mese
+- 🔵 Stima del ricavo da Scambio sul Posto (SSP)
+- 📅 Analisi mensile dell'impianto
+- 📉 Indice di performance
+- ⏱️ Finestra utile di produzione fotovoltaica
+- 💡 Suggerimenti automatici per ottimizzare i consumi
+- 🔄 Aggiornamento automatico in tempo reale
 
+---
 
+# 📋 Requisiti
 
-\---
+Prima dell'installazione assicurati di avere:
 
+- Home Assistant
+- `custom:button-card`
+- Integrazione Solcast configurata
+- Sensori SQL installati seguendo la guida presente nella cartella:
 
-
-\# 📸 Screenshot
-
-
-
-!\[Energy Control Center](screenshot.png)
-
-
-
-\---
-
-
-
-\# ✨ Funzionalità
-
-
-
-\- ☀️ Produzione fotovoltaica in tempo reale
-
-\- 📈 Confronto tra produzione reale e previsione Solcast
-
-\- 🔋 Stato di carica della batteria
-
-\- 🏠 Consumo istantaneo dell'abitazione
-
-\- ⚡ Import / Export rete
-
-\- 📊 Autosufficienza energetica
-
-\- 💰 Beneficio economico del mese
-
-\- 🌱 Stima del contributo SSP
-
-\- 📅 Analisi mensile dell'impianto
-
-\- 🤖 Suggerimenti operativi intelligenti
-
-\- 📉 Indice di performance dell'impianto
-
-\- ⏱️ Finestra di produzione fotovoltaica utile
-
-\- 🔄 Aggiornamento automatico in tempo reale
-
-
-
-\---
-
-
-
-\# ✅ Requisiti
-
-
-
-Prima di utilizzare questa dashboard è necessario avere installato:
-
-
-
-\- Home Assistant
-
-\- custom:button-card
-
-\- Solcast
-
-\- HA Energy Suite SQL Package
-
-
-
-\---
-
-
-
-\# 🚀 Installazione
-
-
-
-\## 1. Installa Solcast
-
-
-
-Questa dashboard utilizza le previsioni generate dall'integrazione ufficiale Solcast.
-
-
-
-Una volta configurata l'integrazione non sarà necessario modificare alcun sensore relativo alle previsioni.
-
-
-
-\---
-
-
-
-\## 2. Installa HA Energy Suite SQL Package
-
-
-
-La dashboard utilizza i sensori creati dal pacchetto SQL per leggere:
-
-
-
-\- dati mensili
-
-\- statistiche storiche
-
-\- benefici economici
-
-\- import/export
-
-\- consumi
-
-\- produzione
-
-
-
-Assicurati di aver installato e configurato correttamente il pacchetto SQL prima di utilizzare questa card.
-
-
-
-\---
-
-
-
-\## 3. Copia la card
-
-
-
-Apri il file
-
-
-
+```text
+/sql/
 ```
 
+---
+
+# 🚀 Installazione
+
+## 1. Installa i sensori SQL
+
+Prima di utilizzare questa dashboard è necessario installare i sensori SQL.
+
+Apri la cartella:
+
+```text
+/sql/
+```
+
+e segui il relativo **README.md**.
+
+Questa operazione deve essere eseguita una sola volta.
+
+---
+
+## 2. Riavvia Home Assistant
+
+Dopo aver installato i sensori SQL riavvia Home Assistant.
+
+---
+
+## 3. Configura Solcast
+
+Questa dashboard utilizza le previsioni generate dall'integrazione ufficiale **Solcast**.
+
+Una volta configurata l'integrazione non sarà necessario modificare i relativi sensori.
+
+---
+
+## 4. Aggiungi la dashboard
+
+Apri la dashboard nella quale desideri inserire la card.
+
+Seleziona:
+
+**Modifica Dashboard → Aggiungi Card → Manuale**
+
+Copia e incolla il contenuto del file:
+
+```text
 energy-control-center.yaml
-
 ```
 
+---
 
+## 5. Personalizza la card
 
-e copialo all'interno della tua dashboard Home Assistant.
+La dashboard è già pronta all'uso.
 
+È sufficiente modificare:
 
+### I sensori del tuo inverter
 
-\---
+Cerca tutti i sensori che iniziano con:
 
-
-
-\# ⚙️ Configurazione
-
-
-
-L'unica configurazione richiesta consiste nel sostituire i sensori del proprio inverter.
-
-
-
-La logica della card è già completa e non richiede modifiche.
-
-
-
-\---
-
-
-
-\# 🔍 Come sostituire i sensori
-
-
-
-Apri il file
-
-
-
+```text
+sensor.inverter_
 ```
 
-energy-control-center.yaml
+e sostituiscili con gli Entity ID del tuo impianto.
 
-```
-
-
-
-e utilizza la funzione di ricerca del tuo editor.
-
-
-
-\## Windows
-
-
-
-Ricerca
-
-
-
-```
-
-CTRL + F
-
-```
-
-
-
-Ricerca e sostituzione
-
-
-
-```
-
-CTRL + H
-
-```
-
-
-
-\---
-
-
-
-\# 📝 Sensori da modificare
-
-
-
-Cerca tutti i sensori che iniziano con
-
-
-
-```
-
-sensor.inverter\_
-
-```
-
-
-
-e sostituiscili con quelli del tuo impianto.
-
-
-
-I principali sono:
-
-
+I principali sensori sono:
 
 | Sensore | Descrizione |
-
 |----------|-------------|
+| `sensor.inverter_pv_power` | Produzione fotovoltaica istantanea |
+| `sensor.inverter_load_l1_power` | Consumo istantaneo della casa |
+| `sensor.inverter_internal_ct1_power` | Import / Export della rete |
+| `sensor.inverter_battery` | Stato di carica della batteria |
+| `sensor.inverter_today_production` | Produzione giornaliera |
+| `sensor.inverter_today_peak_power` | Picco di produzione |
+| `sensor.inverter_today_energy_import` | Energia acquistata oggi |
 
-| sensor.inverter\_pv\_power | Produzione FV istantanea |
+Eventuali altri sensori con prefisso:
 
-| sensor.inverter\_load\_l1\_power | Consumo della casa |
-
-| sensor.inverter\_internal\_ct1\_power | Import / Export rete |
-
-| sensor.inverter\_battery | Stato di carica batteria |
-
-| sensor.inverter\_today\_production | Produzione giornaliera |
-
-| sensor.inverter\_today\_peak\_power | Picco di produzione |
-
-| sensor.inverter\_today\_energy\_import | Energia acquistata oggi |
-
-
-
-Potrebbero essere presenti altri sensori con prefisso
-
-
-
+```text
+sensor.inverter_
 ```
 
-sensor.inverter\_
+dovranno essere sostituiti nello stesso modo.
 
+---
+
+### Valori economici
+
+All'inizio del file troverai queste righe:
+
+```javascript
+const costoKwh = 0.25;
+const quotaFissaMese = 18.00;
+const sspKwh = 0.15;
 ```
 
+Modifica solamente questi valori inserendo quelli del tuo contratto di fornitura.
 
+- **costoKwh** → costo finale di 1 kWh acquistato.
+- **quotaFissaMese** → quota fissa media mensile della bolletta.
+- **sspKwh** → valore medio riconosciuto per ogni kWh immesso tramite Scambio sul Posto.
 
-che dovranno essere sostituiti con gli Entity ID del proprio impianto.
+Una volta completate queste modifiche, salva la dashboard.
 
+---
 
+# 📝 Note
 
-\---
+- Tutti i dati storici vengono letti dalle Long-Term Statistics della Dashboard Energia.
+- Le previsioni di produzione utilizzano l'integrazione ufficiale Solcast.
+- I calcoli economici utilizzano i valori configurati all'inizio del file.
+- I dati economici dipendono dai sensori SQL installati nella cartella `/sql`.
 
+---
 
+# 💡 Consigli
 
-\# 🌤️ Solcast
+Per sfruttare al meglio i dati raccolti, puoi installare anche:
 
-
-
-La dashboard utilizza esclusivamente i sensori standard dell'integrazione ufficiale Solcast.
-
-
-
-Non è necessario modificarli.
-
-
-
-\---
-
-
-
-\# 📦 Dipendenze
-
-
-
-| Componente | Necessario |
-
-|------------|:----------:|
-
-| Solcast | ✅ |
-
-| HA Energy Suite SQL Package | ✅ |
-
-| Configurazione sensori inverter | ✅ |
-
-
-
-\---
-
-
-
-\# 💡 Suggerimenti
-
-
-
-Per ottenere il massimo da questa dashboard si consiglia di installare anche:
-
-
-
-\- 📊 Monthly Report
-
-\- 📅 Annual Report
-
-
+- 📈 Monthly Report
+- 📊 Annual Report
 
 Entrambe le card utilizzano gli stessi sensori SQL e si integrano perfettamente con Energy Control Center.
 
+---
 
+# ❤️ Supporto
 
-\---
+Hai trovato un bug o desideri proporre un miglioramento?
 
+Puoi:
 
+- Aprire una **GitHub Issue**
+- Inviare una **Pull Request**
 
-\# ❤️ Supporta il progetto
+Se questa dashboard ti è stata utile, lascia una ⭐ al repository.
 
+Ogni contributo aiuta il progetto a crescere.
 
+---
 
-Se HA Energy Suite ti è stato utile, lascia una ⭐ al repository GitHub.
+# 📄 Licenza
 
-
-
-È il modo migliore per supportare lo sviluppo di nuove dashboard e funzionalità per la community.
-
-
-
-\---
-
-
-
-\# 📄 Licenza
-
-
-
-Distribuito con la stessa licenza del progetto \*\*HA Energy Suite\*\*.
-
+Distribuito con licenza **MIT**.
