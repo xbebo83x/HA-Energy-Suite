@@ -21,6 +21,13 @@ custom_fields:
         catch(e) { window._pvEM = {}; }
       }
       window._pvEid = function(k, d) { return window._pvEM[k] || d; };
+      const nf = function(entity, def) {
+        var v = n(entity);
+        if (v !== null && v !== undefined && !isNaN(v)) return v;
+        var c = window._pvEM && window._pvEM[entity];
+        if (c !== undefined && c !== null) { var p = parseFloat(c); if (!isNaN(p)) return p; }
+        return def;
+      };
 
       // --- SENSORI (entity ID configurabili nel tab Configurazione) ---
       const pv = n(window._pvEid('pv', 'sensor.solarman_pv_power_w'));
@@ -53,23 +60,23 @@ custom_fields:
       }
 
       // --- SOGLIE TUNABLE (input_number) con fallback hardcoded ---
-      const sogliaFVUtileW      = n('input_number.fv_soglia_utile_w')      || 300;
-      const sogliaEvening       = n('input_number.fv_soglia_sera_kwh')      || 1;
-      const surplusAltoW        = n('input_number.fv_surplus_alto_w')       || 1800;
-      const surplusMedioW       = n('input_number.fv_surplus_medio_w')      || 800;
-      const surplusBassoW       = n('input_number.fv_surplus_basso_w')      || 200;
-      const battAltaSoglia      = n('input_number.batt_soglia_alta')        || 85;
-      const battMediaSoglia     = n('input_number.batt_soglia_media')       || 65;
-      const battBassaSoglia     = n('input_number.batt_soglia_bassa')       || 35;
-      const battSerabuona       = n('input_number.batt_sera_buona')         || 70;
-      const battSeraDiscreta    = n('input_number.batt_sera_discreta')      || 40;
-      const trendUpRatio        = n('input_number.fv_trend_up_ratio')       || 1.20;
-      const trendDownRatio      = n('input_number.fv_trend_down_ratio')     || 0.75;
-      const scorePesoForecast   = n('input_number.score_peso_forecast')     || 0.25;
-      const scorePesoAutsOggi   = n('input_number.score_peso_auts_oggi')    || 0.25;
-      const scorePesoAutsMese   = n('input_number.score_peso_auts_mese')    || 0.25;
-      const scorePesoBatt       = n('input_number.score_peso_batteria')     || 0.20;
-      const scoreBonus          = n('input_number.score_bonus_max')         || 5;
+      const sogliaFVUtileW      = nf('input_number.fv_soglia_utile_w',      300);
+      const sogliaEvening       = nf('input_number.fv_soglia_sera_kwh',      1);
+      const surplusAltoW        = nf('input_number.fv_surplus_alto_w',       1800);
+      const surplusMedioW       = nf('input_number.fv_surplus_medio_w',      800);
+      const surplusBassoW       = nf('input_number.fv_surplus_basso_w',      200);
+      const battAltaSoglia      = nf('input_number.batt_soglia_alta',        85);
+      const battMediaSoglia     = nf('input_number.batt_soglia_media',       65);
+      const battBassaSoglia     = nf('input_number.batt_soglia_bassa',       35);
+      const battSerabuona       = nf('input_number.batt_sera_buona',         70);
+      const battSeraDiscreta    = nf('input_number.batt_sera_discreta',      40);
+      const trendUpRatio        = nf('input_number.fv_trend_up_ratio',       1.20);
+      const trendDownRatio      = nf('input_number.fv_trend_down_ratio',     0.75);
+      const scorePesoForecast   = nf('input_number.score_peso_forecast',     0.25);
+      const scorePesoAutsOggi   = nf('input_number.score_peso_auts_oggi',    0.25);
+      const scorePesoAutsMese   = nf('input_number.score_peso_auts_mese',    0.25);
+      const scorePesoBatt       = nf('input_number.score_peso_batteria',     0.20);
+      const scoreBonus          = nf('input_number.score_bonus_max',         5);
       // -------------------------------------------------------------
 
       const now = new Date();
@@ -88,10 +95,10 @@ custom_fields:
       const autosuffOggi = n('sensor.autosufficienza_oggi');
       const autosuffMese = consumoMese > 0 ? Math.max(0, Math.min(100, ((consumoMese - importMese) / consumoMese) * 100)) : 0;
 
-      const costoKwh = n('input_number.costo_kwh_reale') || 0.25;
-      const quotaGiorno = n('input_number.quota_fissa_giornaliera_corrente') || 0;
+      const costoKwh = nf('input_number.costo_kwh_reale',                 0.25);
+      const quotaGiorno = nf('input_number.quota_fissa_giornaliera_corrente', 0);
       const canoneTv = parseFloat((window._pvEM && window._pvEM['canoneTv']) ? window._pvEM['canoneTv'] : '18') || 0;
-      const sspKwh = n('input_number.fv_valore_ssp_kwh') || 0.15;
+      const sspKwh = nf('input_number.fv_valore_ssp_kwh',                 0.15);
 
       const fissi = (quotaGiorno * giorniMese) + canoneTv;
       const bollettaConFv = (importMese * costoKwh) + fissi;
@@ -416,7 +423,8 @@ custom_fields:
         const min  = (val && val.attributes && val.attributes.min  != null) ? val.attributes.min  : sMin;
         const max  = (val && val.attributes && val.attributes.max  != null) ? val.attributes.max  : sMax;
         const step = (val && val.attributes && val.attributes.step != null) ? val.attributes.step : sStep;
-        const eff  = (cur !== null && !isNaN(cur)) ? cur : (fallback !== null ? fallback : min);
+        const cached = (window._pvEM && window._pvEM[entity] !== undefined) ? parseFloat(window._pvEM[entity]) : null;
+        const eff  = (cur !== null && !isNaN(cur)) ? cur : (cached !== null && !isNaN(cached)) ? cached : (fallback !== null ? fallback : min);
         const missing = (cur === null || isNaN(cur));
         const pct = Math.round(Math.max(0, Math.min(100, ((eff - min) / Math.max(max - min, 0.0001)) * 100)));
         const unitStr = unit ? ' ' + unit : '';
@@ -429,9 +437,14 @@ custom_fields:
           "this.closest('.srow').querySelector('.slive').textContent=this.value+'" + (unit ? ' '+unit : '') + "';",
           "var b=this.closest('.srow').querySelector('.smissing');if(b)b.style.display='none';"
         ].join('');
-        const onChange = "(()=>{try{const h=document.querySelector('home-assistant').hass;"
-          + "h.callService('input_number','set_value',{entity_id:'" + entity + "',value:parseFloat(this.value)});"
-          + "}catch(e){}})()";
+        const onChange = "(()=>{"
+          + "var v=parseFloat(this.value);"
+          + "try{const h=document.querySelector('home-assistant').hass;"
+          + "h.callService('input_number','set_value',{entity_id:'" + entity + "',value:v});"
+          + "}catch(e){}"
+          + "window._pvEM['" + entity + "']=String(v);"
+          + "try{localStorage.setItem('pv_entities_v1',JSON.stringify(window._pvEM));}catch(e){}"
+          + "})()";
         const bg = 'linear-gradient(90deg,#42a5f5 ' + pct + '%,rgba(255,255,255,.18) ' + pct + '%)';
         return '<div class="srow" style="pointer-events:all;">'
           + '<div class="srow-top">'
